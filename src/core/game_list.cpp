@@ -784,7 +784,7 @@ void GameList::Refresh(bool invalidate_cache, bool only_cache, ProgressCallback*
   INISettingsInterface custom_attributes_ini(GetCustomPropertiesFile());
   custom_attributes_ini.Load();
 
-#ifdef __ANDROID__
+#ifdef DUCKSTATION_ANDROID_APP
   recursive_dirs.push_back(Path::Combine(EmuFolders::DataRoot, "games"));
 #endif
 

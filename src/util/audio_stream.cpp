@@ -15,7 +15,7 @@
 #include "soundtouch/SoundTouch.h"
 #include "soundtouch/SoundTouchDLL.h"
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 #include "freesurround_decoder.h"
 #endif
 
@@ -76,7 +76,9 @@ std::vector<std::pair<std::string, std::string>> AudioStream::GetDriverNames(Aud
   std::vector<std::pair<std::string, std::string>> ret;
   switch (backend)
   {
-#ifndef __ANDROID__
+#if defined(DUCKSTATION_LIBRETRO)
+    // Only the null stream: the frontend plays the sound.
+#elif !defined(DUCKSTATION_ANDROID_APP)
     case AudioBackend::Cubeb:
       ret = GetCubebDriverNames();
       break;
@@ -95,7 +97,9 @@ std::vector<AudioStream::DeviceInfo> AudioStream::GetOutputDevices(AudioBackend 
   std::vector<AudioStream::DeviceInfo> ret;
   switch (backend)
   {
-#ifndef __ANDROID__
+#if defined(DUCKSTATION_LIBRETRO)
+    // Only the null stream: the frontend plays the sound.
+#elif !defined(DUCKSTATION_ANDROID_APP)
     case AudioBackend::Cubeb:
       ret = GetCubebOutputDevices(driver, sample_rate);
       break;
@@ -114,7 +118,9 @@ std::unique_ptr<AudioStream> AudioStream::CreateStream(AudioBackend backend, u32
 {
   switch (backend)
   {
-#ifndef __ANDROID__
+#if defined(DUCKSTATION_LIBRETRO)
+    // Only the null stream: the frontend plays the sound.
+#elif !defined(DUCKSTATION_ANDROID_APP)
     case AudioBackend::Cubeb:
       return CreateCubebAudioStream(sample_rate, parameters, driver_name, device_name, error);
 
@@ -156,7 +162,7 @@ u32 AudioStream::GetMSForBufferSize(u32 sample_rate, u32 buffer_size)
 
 static constexpr const std::array s_backend_names = {
   "Null",
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   "Cubeb",
   "SDL",
 #else
@@ -166,7 +172,7 @@ static constexpr const std::array s_backend_names = {
 };
 static constexpr const std::array s_backend_display_names = {
   TRANSLATE_NOOP("AudioStream", "Null (No Output)"),
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   TRANSLATE_NOOP("AudioStream", "Cubeb"),
   TRANSLATE_NOOP("AudioStream", "SDL"),
 #else
@@ -271,6 +277,27 @@ u32 AudioStream::GetBufferedFramesRelaxed() const
   const u32 wpos = m_wpos.load(std::memory_order_relaxed);
   return (wpos + m_buffer_size - rpos) % m_buffer_size;
 }
+
+#ifdef DUCKSTATION_LIBRETRO
+
+u32 AudioStream::TakeFrames(SampleType* samples, u32 max_frames)
+{
+  DebugAssert(m_internal_channels == NUM_INPUT_CHANNELS);
+  const u32 frames = std::min(GetBufferedFramesRelaxed(), max_frames);
+  u32 rpos = m_rpos.load(std::memory_order_acquire);
+  for (u32 done = 0; done < frames;)
+  {
+    const u32 count = std::min(frames - done, m_buffer_size - rpos);
+    std::memcpy(&samples[done * NUM_INPUT_CHANNELS], &m_buffer[rpos * NUM_INPUT_CHANNELS],
+                count * NUM_INPUT_CHANNELS * sizeof(SampleType));
+    done += count;
+    rpos = (rpos + count) % m_buffer_size;
+  }
+  m_rpos.store(rpos, std::memory_order_release);
+  return frames;
+}
+
+#endif
 
 void AudioStream::ReadFrames(SampleType* samples, u32 num_frames)
 {
@@ -495,7 +522,7 @@ void AudioStream::DestroyBuffer()
 
 void AudioStream::EmptyBuffer()
 {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   if (IsExpansionEnabled())
   {
     m_expander->Flush();
@@ -615,7 +642,7 @@ void AudioStream::ExpandAllocate()
   if (m_parameters.expansion_mode == AudioExpansionMode::Disabled)
     return;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static constexpr std::array<std::pair<FreeSurroundDecoder::ChannelSetup, bool>,
                               static_cast<size_t>(AudioExpansionMode::Count)>
     channel_setup_mapping = {{
@@ -664,7 +691,7 @@ void AudioStream::EndWrite(u32 num_frames)
     return;
   }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   if (IsExpansionEnabled())
   {
     // StretchWriteBlock() overwrites the staging buffer on output, so we need to copy into the expand buffer first.
@@ -898,7 +925,7 @@ void AudioStreamParameters::Load(SettingsInterface& si, const char* section)
     AudioStream::ParseStretchMode(
       si.GetStringValue(section, "StretchMode", AudioStream::GetStretchModeName(DEFAULT_STRETCH_MODE)).c_str())
       .value_or(DEFAULT_STRETCH_MODE);
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   expansion_mode =
     AudioStream::ParseExpansionMode(
       si.GetStringValue(section, "ExpansionMode", AudioStream::GetExpansionModeName(DEFAULT_EXPANSION_MODE)).c_str())

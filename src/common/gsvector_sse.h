@@ -1371,7 +1371,7 @@ public:
 
   ALWAYS_INLINE static GSVector4i loadnt(const void* p)
   {
-    return GSVector4i(_mm_stream_load_si128(static_cast<const __m128i*>(p)));
+    return GSVector4i(_mm_stream_load_si128(const_cast<__m128i*>(static_cast<const __m128i*>(p))));
   }
 
   ALWAYS_INLINE static GSVector4i load32(const void* p) { return GSVector4i(_mm_loadu_si32(p)); }

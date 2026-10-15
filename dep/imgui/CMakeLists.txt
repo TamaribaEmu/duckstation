@@ -8,7 +8,6 @@ set(SRCS
   src/imgui.cpp
   src/imgui_demo.cpp
   src/imgui_draw.cpp
-  src/imgui_freetype.cpp
   src/imgui_stdlib.cpp
   src/imgui_tables.cpp
   src/imgui_widgets.cpp
@@ -16,7 +15,13 @@ set(SRCS
   src/imstb_truetype.h
 )
 
+if(NOT BUILD_LIBRETRO_CORE)
+  list(APPEND SRCS src/imgui_freetype.cpp)
+endif()
+
 add_library(imgui ${SRCS})
 target_include_directories(imgui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_include_directories(imgui INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_link_libraries(imgui PUBLIC Freetype::Freetype lunasvg::lunasvg)
+if(NOT BUILD_LIBRETRO_CORE)
+  target_link_libraries(imgui PUBLIC Freetype::Freetype lunasvg::lunasvg)
+endif()

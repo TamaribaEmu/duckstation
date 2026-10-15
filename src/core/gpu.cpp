@@ -1985,6 +1985,28 @@ bool GPU::PresentDisplay()
   return RenderDisplay(nullptr, display_rect, draw_rect, !g_settings.debugging.show_vram);
 }
 
+#ifdef DUCKSTATION_LIBRETRO
+
+void GPU::GetLibretroFrameSize(u32* width, u32* height) const
+{
+  const bool shown = (m_display_texture && m_display_texture_view_width > 0 && m_display_texture_view_height > 0);
+  *width = shown ? static_cast<u32>(m_display_texture_view_width) : 0;
+  *height = shown ? static_cast<u32>(m_display_texture_view_height) : 0;
+}
+
+void GPU::RenderLibretroFrame(GPUTexture* target)
+{
+  FlushRender();
+
+  const GSVector4i rect(0, 0, static_cast<s32>(target->GetWidth()), static_cast<s32>(target->GetHeight()));
+  g_gpu_device->ClearRenderTarget(target, GPUDevice::DEFAULT_CLEAR_COLOR);
+  RenderDisplay(target, rect, rect, true);
+  target->MakeReadyForSampling();
+  RestoreDeviceContext();
+}
+
+#endif
+
 bool GPU::RenderDisplay(GPUTexture* target, const GSVector4i display_rect, const GSVector4i draw_rect, bool postfx)
 {
   GL_SCOPE_FMT("RenderDisplay: {}", draw_rect);

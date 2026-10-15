@@ -31,7 +31,7 @@ void Settings::SetDefaultHotkeyConfig(SettingsInterface& si)
 {
   si.ClearSection("Hotkeys");
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   si.SetStringValue("Hotkeys", "FastForward", "Keyboard/Tab");
   si.SetStringValue("Hotkeys", "TogglePause", "Keyboard/Space");
   si.SetStringValue("Hotkeys", "Screenshot", "Keyboard/F10");
@@ -134,7 +134,7 @@ static void HotkeyToggleOSD()
   g_settings.display_show_enhancements ^= Host::GetBoolSettingValue("Display", "ShowEnhancements", false);
 }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 
 static bool CanPause()
 {
@@ -164,7 +164,7 @@ static bool CanPause()
 #endif
 
 BEGIN_HOTKEY_LIST(g_common_hotkeys)
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 DEFINE_HOTKEY("OpenPauseMenu", TRANSLATE_NOOP("Hotkeys", "General"), TRANSLATE_NOOP("Hotkeys", "Open Pause Menu"),
               [](s32 pressed) {
                 if (!pressed && CanPause())
@@ -197,7 +197,7 @@ DEFINE_HOTKEY("ToggleTurbo", TRANSLATE_NOOP("Hotkeys", "General"), TRANSLATE_NOO
                   System::SetTurboEnabled(!System::IsTurboEnabled());
               })
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 DEFINE_HOTKEY("ToggleFullscreen", TRANSLATE_NOOP("Hotkeys", "General"), TRANSLATE_NOOP("Hotkeys", "Toggle Fullscreen"),
               [](s32 pressed) {
                 if (!pressed)
@@ -223,7 +223,7 @@ DEFINE_HOTKEY("Screenshot", TRANSLATE_NOOP("Hotkeys", "General"), TRANSLATE_NOOP
                   System::SaveScreenshot();
               })
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 DEFINE_HOTKEY("ToggleMediaCapture", TRANSLATE_NOOP("Hotkeys", "General"),
               TRANSLATE_NOOP("Hotkeys", "Toggle Media Capture"), [](s32 pressed) {
                 if (!pressed)
@@ -270,7 +270,7 @@ DEFINE_HOTKEY("SwapMemoryCards", TRANSLATE_NOOP("Hotkeys", "System"),
                   System::SwapMemoryCards();
               })
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 DEFINE_HOTKEY("FrameStep", TRANSLATE_NOOP("Hotkeys", "System"), TRANSLATE_NOOP("Hotkeys", "Frame Step"),
               [](s32 pressed) {
                 if (!pressed)
@@ -284,7 +284,7 @@ DEFINE_HOTKEY("Rewind", TRANSLATE_NOOP("Hotkeys", "System"), TRANSLATE_NOOP("Hot
   System::SetRewindState(pressed > 0);
 })
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 DEFINE_HOTKEY("ToggleCheats", TRANSLATE_NOOP("Hotkeys", "System"), TRANSLATE_NOOP("Hotkeys", "Toggle Cheats"),
               [](s32 pressed) {
                 if (!pressed)

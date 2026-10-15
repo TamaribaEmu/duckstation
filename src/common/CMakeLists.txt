@@ -98,7 +98,7 @@ if(APPLE)
   target_link_libraries(common PRIVATE ${COCOA_LIBRARY})
 endif()
 
-if(NOT WIN32 AND NOT ANDROID AND NOT APPLE)
+if(NOT WIN32 AND NOT ANDROID AND NOT APPLE AND NOT BUILD_LIBRETRO_CORE)
   target_link_libraries(common PRIVATE libbacktrace::libbacktrace)
 endif()
 

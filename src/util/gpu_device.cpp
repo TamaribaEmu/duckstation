@@ -22,7 +22,9 @@
 #include "fmt/format.h"
 #include "imgui.h"
 #include "shaderc/shaderc.h"
+#ifndef DUCKSTATION_LIBRETRO
 #include "spirv_cross/spirv_cross_c.h"
+#endif
 #include "xxhash.h"
 
 Log_SetChannel(GPUDevice);
@@ -1207,6 +1209,11 @@ std::unique_ptr<GPUDevice> GPUDevice::CreateDeviceForAPI(RenderAPI api)
   {
 #ifdef ENABLE_VULKAN
     case RenderAPI::Vulkan:
+#ifdef DUCKSTATION_LIBRETRO
+      // The device the frontend asked us to make, if any.
+      if (std::unique_ptr<VulkanDevice> external = VulkanDevice::TakeExternalDevice())
+        return external;
+#endif
       return std::make_unique<VulkanDevice>();
 #endif
 
@@ -1234,6 +1241,14 @@ std::unique_ptr<GPUDevice> GPUDevice::CreateDeviceForAPI(RenderAPI api)
   }
 }
 
+// The libretro core uses upstream shaderc (the system's, or the Android NDK's), which lacks the status names and the
+// extra debug info switches of DuckStation's own build.
+#ifdef DUCKSTATION_LIBRETRO
+#define SHADERC_STATUS_TO_STRING(X)
+#else
+#define SHADERC_STATUS_TO_STRING(X) X(shaderc_compilation_status_to_string)
+#endif
+
 #define SHADERC_FUNCTIONS(X)                                                                                           \
   X(shaderc_compiler_initialize)                                                                                       \
   X(shaderc_compiler_release)                                                                                          \
@@ -1243,7 +1258,7 @@ std::unique_ptr<GPUDevice> GPUDevice::CreateDeviceForAPI(RenderAPI api)
   X(shaderc_compile_options_set_generate_debug_info)                                                                   \
   X(shaderc_compile_options_set_optimization_level)                                                                    \
   X(shaderc_compile_options_set_target_env)                                                                            \
-  X(shaderc_compilation_status_to_string)                                                                              \
+  SHADERC_STATUS_TO_STRING(X)                                                                                          \
   X(shaderc_compile_into_spv)                                                                                          \
   X(shaderc_result_release)                                                                                            \
   X(shaderc_result_get_length)                                                                                         \
@@ -1252,6 +1267,7 @@ std::unique_ptr<GPUDevice> GPUDevice::CreateDeviceForAPI(RenderAPI api)
   X(shaderc_result_get_compilation_status)                                                                             \
   X(shaderc_result_get_error_message)
 
+#ifndef DUCKSTATION_LIBRETRO
 #define SPIRV_CROSS_FUNCTIONS(X)                                                                                       \
   X(spvc_context_create)                                                                                               \
   X(spvc_context_destroy)                                                                                              \
@@ -1279,16 +1295,22 @@ std::unique_ptr<GPUDevice> GPUDevice::CreateDeviceForAPI(RenderAPI api)
 #define SPIRV_CROSS_MSL_FUNCTIONS(X)
 #endif
 
+#endif
+
 // TODO: NOT thread safe, yet.
 namespace dyn_libs {
 static bool OpenShaderc(Error* error);
 static void CloseShaderc();
+#ifndef DUCKSTATION_LIBRETRO
 static bool OpenSpirvCross(Error* error);
 static void CloseSpirvCross();
+#endif
 static void CloseAll();
 
 static DynamicLibrary s_shaderc_library;
+#ifndef DUCKSTATION_LIBRETRO
 static DynamicLibrary s_spirv_cross_library;
+#endif
 
 static shaderc_compiler_t s_shaderc_compiler = nullptr;
 
@@ -1296,15 +1318,26 @@ static bool s_close_registered = false;
 
 #define ADD_FUNC(F) static decltype(&::F) F;
 SHADERC_FUNCTIONS(ADD_FUNC)
+#ifndef DUCKSTATION_LIBRETRO
 SPIRV_CROSS_FUNCTIONS(ADD_FUNC)
 SPIRV_CROSS_HLSL_FUNCTIONS(ADD_FUNC)
 SPIRV_CROSS_MSL_FUNCTIONS(ADD_FUNC)
+#endif
 #undef ADD_FUNC
 
 } // namespace dyn_libs
 
 bool dyn_libs::OpenShaderc(Error* error)
 {
+#ifdef DUCKSTATION_SHADERC_STATIC
+  // shaderc is linked in (the libretro core on Android): nothing to open.
+  if (s_shaderc_compiler)
+    return true;
+
+#define LOAD_FUNC(F) F = &::F;
+  SHADERC_FUNCTIONS(LOAD_FUNC)
+#undef LOAD_FUNC
+#else
   if (s_shaderc_library.IsOpen())
     return true;
 
@@ -1325,6 +1358,7 @@ bool dyn_libs::OpenShaderc(Error* error)
 
   SHADERC_FUNCTIONS(LOAD_FUNC)
 #undef LOAD_FUNC
+#endif
 
   s_shaderc_compiler = shaderc_compiler_initialize();
   if (!s_shaderc_compiler)
@@ -1358,6 +1392,7 @@ void dyn_libs::CloseShaderc()
   s_shaderc_library.Close();
 }
 
+#ifndef DUCKSTATION_LIBRETRO
 bool dyn_libs::OpenSpirvCross(Error* error)
 {
   if (s_spirv_cross_library.IsOpen())
@@ -1408,15 +1443,21 @@ void dyn_libs::CloseSpirvCross()
   s_spirv_cross_library.Close();
 }
 
+#endif
+
 void dyn_libs::CloseAll()
 {
   CloseShaderc();
+#ifndef DUCKSTATION_LIBRETRO
   CloseSpirvCross();
+#endif
 }
 
+#ifndef DUCKSTATION_LIBRETRO
 #undef SPIRV_CROSS_HLSL_FUNCTIONS
 #undef SPIRV_CROSS_MSL_FUNCTIONS
 #undef SPIRV_CROSS_FUNCTIONS
+#endif
 #undef SHADERC_FUNCTIONS
 
 bool GPUDevice::CompileGLSLShaderToVulkanSpv(GPUShaderStage stage, GPUShaderLanguage source_language,
@@ -1446,8 +1487,13 @@ bool GPUDevice::CompileGLSLShaderToVulkanSpv(GPUShaderStage stage, GPUShaderLang
 
   dyn_libs::shaderc_compile_options_set_source_language(options, shaderc_source_language_glsl);
   dyn_libs::shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, 0);
+#ifdef DUCKSTATION_LIBRETRO
+  if (m_debug_device)
+    dyn_libs::shaderc_compile_options_set_generate_debug_info(options);
+#else
   dyn_libs::shaderc_compile_options_set_generate_debug_info(options, m_debug_device,
                                                             m_debug_device && nonsemantic_debug_info);
+#endif
   dyn_libs::shaderc_compile_options_set_optimization_level(
     options, optimization ? shaderc_optimization_level_performance : shaderc_optimization_level_zero);
 
@@ -1459,10 +1505,13 @@ bool GPUDevice::CompileGLSLShaderToVulkanSpv(GPUShaderStage stage, GPUShaderLang
   if (status != shaderc_compilation_status_success)
   {
     const std::string_view errors(result ? dyn_libs::shaderc_result_get_error_message(result) : "null result object");
-    Error::SetStringFmt(error, "Failed to compile shader to SPIR-V: {}\n{}",
-                        dyn_libs::shaderc_compilation_status_to_string(status), errors);
-    ERROR_LOG("Failed to compile shader to SPIR-V: {}\n{}", dyn_libs::shaderc_compilation_status_to_string(status),
-              errors);
+#ifdef DUCKSTATION_LIBRETRO
+    const std::string status_name = fmt::format("status {}", static_cast<int>(status));
+#else
+    const char* status_name = dyn_libs::shaderc_compilation_status_to_string(status);
+#endif
+    Error::SetStringFmt(error, "Failed to compile shader to SPIR-V: {}\n{}", status_name, errors);
+    ERROR_LOG("Failed to compile shader to SPIR-V: {}\n{}", status_name, errors);
     DumpBadShader(source, errors);
   }
   else
@@ -1485,6 +1534,14 @@ bool GPUDevice::CompileGLSLShaderToVulkanSpv(GPUShaderStage stage, GPUShaderLang
 bool GPUDevice::TranslateVulkanSpvToLanguage(const std::span<const u8> spirv, GPUShaderStage stage,
                                              GPUShaderLanguage target_language, u32 target_version, std::string* output,
                                              Error* error)
+
+#ifdef DUCKSTATION_LIBRETRO
+{
+  // Only the Vulkan renderer is built, which never translates SPIR-V.
+  Error::SetStringView(error, "SPIR-V translation is not available");
+  return false;
+}
+#else
 {
   if (!dyn_libs::OpenSpirvCross(error))
     return false;
@@ -1739,6 +1796,7 @@ bool GPUDevice::TranslateVulkanSpvToLanguage(const std::span<const u8> spirv, GP
   output->assign(out_src, out_src_length);
   return true;
 }
+#endif
 
 std::unique_ptr<GPUShader> GPUDevice::TranspileAndCreateShaderFromSource(
   GPUShaderStage stage, GPUShaderLanguage source_language, std::string_view source, const char* entry_point,

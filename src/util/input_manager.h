@@ -28,7 +28,7 @@ enum class InputSourceType : u32
   DInput,
   XInput,
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   SDL,
   RawInput,
 #else

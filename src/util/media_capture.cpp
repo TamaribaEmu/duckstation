@@ -42,7 +42,7 @@
 #pragma comment(lib, "mfuuid")
 #endif
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -1780,7 +1780,7 @@ bool MediaCaptureMF::ProcessAudioPackets(s64 video_pts, Error* error)
 
 #endif
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 
 // We're using deprecated fields because we're targeting multiple ffmpeg versions.
 #if defined(_MSC_VER)
@@ -2865,7 +2865,7 @@ static constexpr const std::array s_backend_names = {
 #ifdef _WIN32
   "MediaFoundation",
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   "FFmpeg",
 #endif
 };
@@ -2873,7 +2873,7 @@ static constexpr const std::array s_backend_display_names = {
 #ifdef _WIN32
   TRANSLATE_NOOP("MediaCapture", "Media Foundation"),
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   TRANSLATE_NOOP("MediaCapture", "FFmpeg"),
 #endif
 };
@@ -2922,7 +2922,7 @@ MediaCapture::ContainerList MediaCapture::GetContainerList(MediaCaptureBackend b
       ret = MediaCaptureMF::GetContainerList();
       break;
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     case MediaCaptureBackend::FFmpeg:
       ret = MediaCaptureFFmpeg::GetContainerList();
       break;
@@ -2943,7 +2943,7 @@ MediaCapture::CodecList MediaCapture::GetVideoCodecList(MediaCaptureBackend back
       ret = MediaCaptureMF::GetVideoCodecList(container);
       break;
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     case MediaCaptureBackend::FFmpeg:
       ret = MediaCaptureFFmpeg::GetVideoCodecList(container);
       break;
@@ -2964,7 +2964,7 @@ MediaCapture::CodecList MediaCapture::GetAudioCodecList(MediaCaptureBackend back
       ret = MediaCaptureMF::GetAudioCodecList(container);
       break;
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     case MediaCaptureBackend::FFmpeg:
       ret = MediaCaptureFFmpeg::GetAudioCodecList(container);
       break;
@@ -2983,7 +2983,7 @@ std::unique_ptr<MediaCapture> MediaCapture::Create(MediaCaptureBackend backend, 
     case MediaCaptureBackend::MediaFoundation:
       return MediaCaptureMF::Create(error);
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     case MediaCaptureBackend::FFmpeg:
       return MediaCaptureFFmpeg::Create(error);
 #endif

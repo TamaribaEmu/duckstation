@@ -77,6 +77,28 @@ public:
   static GPUList EnumerateGPUs();
   static AdapterInfoList GetAdapterList();
 
+#ifdef DUCKSTATION_LIBRETRO
+  /// Libretro: the frontend's Vulkan instance and GPU. CreateExternalDevice() makes the device on them (from the
+  /// frontend's context negotiation callback), and the next Create() picks that device up. The frontend owns the
+  /// instance and keeps the device afterwards: DestroyDevice() destroys neither.
+  struct ExternalDevice
+  {
+    VkPhysicalDevice gpu;
+    VkDevice device;
+    VkQueue queue;
+    u32 queue_family;
+    VkQueue present_queue;
+    u32 present_queue_family;
+  };
+  static bool CreateExternalDevice(VkInstance instance, VkPhysicalDevice gpu, VkSurfaceKHR surface,
+                                   const char* const* required_extensions, u32 num_required_extensions,
+                                   ExternalDevice* out, Error* error);
+  /// The device CreateExternalDevice() made, for Create() (null if there is none).
+  static std::unique_ptr<VulkanDevice> TakeExternalDevice();
+  /// The frontend's lock for the queue it shares with us, held around every use of the queue.
+  static void SetExternalQueueLock(void (*lock)(void*), void (*unlock)(void*), void* user);
+#endif
+
   RenderAPI GetRenderAPI() const override;
 
   bool HasSurface() const override;
@@ -402,6 +424,11 @@ private:
   void PresentThread();
   void StartPresentThread();
   void StopPresentThread();
+
+#ifdef DUCKSTATION_LIBRETRO
+  bool m_external = false;
+  std::vector<const char*> m_external_required_extensions;
+#endif
 
   VkInstance m_instance = VK_NULL_HANDLE;
   VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;

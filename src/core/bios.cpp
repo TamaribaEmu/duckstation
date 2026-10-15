@@ -402,7 +402,7 @@ std::optional<BIOS::Image> BIOS::FindBIOSImageInDirectory(ConsoleRegion region, 
 
   if (!image.has_value())
   {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     Error::SetStringFmt(
       error,
       TRANSLATE_FS("System", "No BIOS image found for {} region.\n\nDuckStation requires a PS1 or PS2 BIOS in order to "

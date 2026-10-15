@@ -608,7 +608,7 @@ static std::array<const char*, static_cast<u32>(InputSourceType::Count)> s_input
   "DInput",
   "XInput",
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   "SDL",
   "RawInput",
 #else
@@ -642,7 +642,7 @@ bool InputManager::GetInputSourceDefaultEnabled(InputSourceType type)
       return false;
 #endif
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     case InputSourceType::SDL:
       return true;
     case InputSourceType::RawInput:
@@ -1229,7 +1229,7 @@ void InputManager::UpdatePointerCount()
     return;
   }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   InputSource* ris = GetInputSourceInterface(InputSourceType::RawInput);
   DebugAssert(ris);
 
@@ -2000,7 +2000,7 @@ GenericInputBindingMapping InputManager::GetGenericBindingMapping(std::string_vi
 
 bool InputManager::IsInputSourceEnabled(SettingsInterface& si, InputSourceType type)
 {
-#ifdef __ANDROID__
+#ifdef DUCKSTATION_ANDROID_APP
   // Force Android source to always be enabled so nobody accidentally breaks it via ini.
   if (type == InputSourceType::Android)
     return true;
@@ -2048,7 +2048,9 @@ void InputManager::ReloadSources(SettingsInterface& si, std::unique_lock<std::mu
   UpdateInputSourceState(si, settings_lock, InputSourceType::XInput, &InputSource::CreateXInputSource);
   UpdateInputSourceState(si, settings_lock, InputSourceType::RawInput, &InputSource::CreateWin32RawInputSource);
 #endif
-#ifndef __ANDROID__
+#if defined(DUCKSTATION_LIBRETRO)
+  // No input sources: the frontend sets the pads' state.
+#elif !defined(DUCKSTATION_ANDROID_APP)
   UpdateInputSourceState(si, settings_lock, InputSourceType::SDL, &InputSource::CreateSDLSource);
 #else
   UpdateInputSourceState(si, settings_lock, InputSourceType::Android, &InputSource::CreateAndroidSource);

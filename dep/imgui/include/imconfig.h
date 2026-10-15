@@ -81,13 +81,17 @@
 //---- Use FreeType to build and rasterize the font atlas (instead of stb_truetype which is embedded by default in Dear ImGui)
 // Requires FreeType headers to be available in the include path. Requires program to be compiled with 'misc/freetype/imgui_freetype.cpp' (in this repository) + the FreeType library (not provided).
 // On Windows you may use vcpkg with 'vcpkg install freetype --triplet=x64-windows' + 'vcpkg integrate install'.
+#ifndef DUCKSTATION_LIBRETRO // the libretro core uses only the built-in font (stb_truetype)
 #define IMGUI_ENABLE_FREETYPE
+#endif
 
 //---- Use FreeType+lunasvg library to render OpenType SVG fonts (SVGinOT)
 // Requires lunasvg headers to be available in the include path + program to be linked with the lunasvg library (not provided).
 // Only works in combination with IMGUI_ENABLE_FREETYPE.
 // (implementation is based on Freetype's rsvg-port.c which is licensed under CeCILL-C Free Software License Agreement)
+#ifndef DUCKSTATION_LIBRETRO
 #define IMGUI_ENABLE_FREETYPE_LUNASVG
+#endif
 
 //---- Use stb_truetype to build and rasterize the font atlas (default)
 // The only purpose of this define is if you want force compilation of the stb_truetype backend ALONG with the FreeType backend.

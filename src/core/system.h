@@ -9,6 +9,7 @@
 #include "util/image.h"
 
 #include <memory>
+#include <span>
 #include <optional>
 #include <string>
 
@@ -391,7 +392,7 @@ bool SaveScreenshot(const char* filename = nullptr, DisplayScreenshotMode mode =
                     DisplayScreenshotFormat format = g_settings.display_screenshot_format,
                     u8 quality = g_settings.display_screenshot_quality, bool compress_on_thread = true);
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 
 /// Returns the path that a new media capture would be saved to by default. Safe to call from any thread.
 std::string GetNewMediaCapturePath(const std::string_view title, const std::string_view container);
@@ -456,6 +457,14 @@ void InvalidateDisplay();
 //////////////////////////////////////////////////////////////////////////
 void CalculateRewindMemoryUsage(u32 num_saves, u32 resolution_scale, u64* ram_usage, u64* vram_usage);
 void ClearMemorySaveStates();
+
+#ifdef DUCKSTATION_LIBRETRO
+/// Libretro: the whole machine in memory (what a state file holds, uncompressed, without the disc), for the
+/// frontend's states. The size is fixed for the running game.
+size_t GetLibretroStateSize();
+bool SaveLibretroState(std::span<u8> data, Error* error);
+bool LoadLibretroState(std::span<const u8> data, Error* error);
+#endif
 void SetRunaheadReplayFlag();
 
 /// Shared socket multiplexer, used by PINE/GDB/etc.

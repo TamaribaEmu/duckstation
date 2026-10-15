@@ -234,6 +234,14 @@ public:
   /// Draws the current display texture, with any post-processing.
   bool PresentDisplay();
 
+#ifdef DUCKSTATION_LIBRETRO
+  /// Libretro: the size RenderLibretroFrame() draws at, the picture at internal resolution (0 x 0 while blank).
+  void GetLibretroFrameSize(u32* width, u32* height) const;
+  /// Draws the current picture into `target`, filling it (the frontend corrects the aspect ratio), and leaves the
+  /// texture ready for sampling.
+  void RenderLibretroFrame(GPUTexture* target);
+#endif
+
   /// Sends the current frame to media capture.
   bool SendDisplayToMediaCapture(MediaCapture* cap);
 

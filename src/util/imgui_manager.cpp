@@ -20,7 +20,9 @@
 #include "IconsFontAwesome5.h"
 #include "fmt/format.h"
 #include "imgui.h"
+#ifndef DUCKSTATION_LIBRETRO
 #include "imgui_freetype.h"
+#endif
 #include "imgui_internal.h"
 
 #include <atomic>
@@ -231,7 +233,7 @@ bool ImGuiManager::Initialize(float global_scale, bool show_osd_messages, Error*
   io.BackendUsingLegacyKeyArrays = 0;
   io.BackendUsingLegacyNavInputArray = 0;
   io.KeyRepeatDelay = 0.5f;
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   // Android has no keyboard, nor are we using ImGui for any actual user-interactable windows.
   io.ConfigFlags |=
     ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_NoMouseCursorChange;
@@ -531,6 +533,11 @@ void ImGuiManager::SetKeyMap()
 
 bool ImGuiManager::LoadFontData()
 {
+#ifdef DUCKSTATION_LIBRETRO
+  // The libretro core draws nothing of its own on screen: ImGui's built-in font is enough (AddImGuiFonts()).
+  return true;
+#endif
+
   if (s_standard_font_data.empty())
   {
     std::optional<DynamicHeapArray<u8>> font_data = s_font_path.empty() ?
@@ -639,7 +646,9 @@ bool ImGuiManager::AddIconFonts(float size)
     cfg.GlyphMinAdvanceX = size;
     cfg.GlyphMaxAdvanceX = size;
     cfg.FontDataOwnedByAtlas = false;
+#ifndef DUCKSTATION_LIBRETRO
     cfg.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LoadColor | ImGuiFreeTypeBuilderFlags_Bitmap;
+#endif
 
     if (!ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
           s_emoji_font_data.data(), static_cast<int>(s_emoji_font_data.size()), size * 0.9f, &cfg,
@@ -659,6 +668,17 @@ bool ImGuiManager::AddImGuiFonts(bool fullscreen_fonts)
 
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->Clear();
+
+#ifdef DUCKSTATION_LIBRETRO
+  (void)standard_font_size;
+  (void)fixed_font_size;
+  s_standard_font = io.Fonts->AddFontDefault();
+  s_fixed_font = s_standard_font;
+  s_medium_font = fullscreen_fonts ? s_standard_font : nullptr;
+  s_large_font = fullscreen_fonts ? s_standard_font : nullptr;
+  ImGuiFullscreen::SetFonts(s_standard_font, s_medium_font, s_large_font);
+  return io.Fonts->Build();
+#endif
 
   s_standard_font = AddTextFont(standard_font_size);
   if (!s_standard_font || !AddIconFonts(standard_font_size))

@@ -43,7 +43,7 @@ Log_SetChannel(Bus);
 // TODO: Get rid of page code bits, instead use page faults to track SMC.
 
 // Exports for external debugger access
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 namespace Exports {
 
 extern "C" {
@@ -254,7 +254,7 @@ bool Bus::AllocateMemoryMap(bool export_shared_memory, Error* error)
   g_memory_handlers_isc = g_memory_handlers + MEMORY_LUT_SLOTS;
   SetHandlers();
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   Exports::RAM = reinterpret_cast<uintptr_t>(g_unprotected_ram);
 #endif
 
@@ -263,7 +263,7 @@ bool Bus::AllocateMemoryMap(bool export_shared_memory, Error* error)
 
 void Bus::ReleaseMemoryMap()
 {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   Exports::RAM = 0;
   Exports::RAM_SIZE = 0;
   Exports::RAM_MASK = 0;
@@ -373,7 +373,7 @@ bool Bus::ReallocateMemoryMap(bool export_shared_memory, Error* error)
 
 void Bus::CleanupMemoryMap()
 {
-#if !defined(_WIN32) && !defined(__ANDROID__)
+#if !defined(_WIN32) && !defined(DUCKSTATION_ANDROID_APP)
   // This is only needed on Linux.
   if (!s_shmem_name.empty())
     MemMap::DeleteSharedMemory(s_shmem_name.c_str());
@@ -392,7 +392,7 @@ void Bus::SetRAMSize(bool enable_8mb_ram)
   g_ram_size = enable_8mb_ram ? RAM_8MB_SIZE : RAM_2MB_SIZE;
   g_ram_mask = enable_8mb_ram ? RAM_8MB_MASK : RAM_2MB_MASK;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   Exports::RAM_SIZE = g_ram_size;
   Exports::RAM_MASK = g_ram_mask;
 #endif

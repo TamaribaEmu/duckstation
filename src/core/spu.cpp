@@ -2450,7 +2450,7 @@ void SPU::Execute(void* param, TickCount ticks, TickCount ticks_late)
       }
     }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
     if (MediaCapture* cap = System::GetMediaCapture()) [[unlikely]]
     {
       if (!cap->DeliverAudioFrames(output_frame_start, frames_in_this_batch))

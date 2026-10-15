@@ -298,11 +298,9 @@ void Log::DebugOutputLogCallback(void* pUserParam, const char* channelName, cons
     ANDROID_LOG_INFO,  // NONE
     ANDROID_LOG_ERROR, // ERROR
     ANDROID_LOG_WARN,  // WARNING
-    ANDROID_LOG_INFO,  // PERF
     ANDROID_LOG_INFO,  // INFO
     ANDROID_LOG_INFO,  // VERBOSE
     ANDROID_LOG_DEBUG, // DEV
-    ANDROID_LOG_DEBUG, // PROFILE
     ANDROID_LOG_DEBUG, // DEBUG
     ANDROID_LOG_DEBUG, // TRACE
   };

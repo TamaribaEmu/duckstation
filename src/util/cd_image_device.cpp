@@ -682,7 +682,7 @@ bool CDImage::IsDeviceName(const char* filename)
   return std::string_view(filename).starts_with("\\\\.\\");
 }
 
-#elif defined(__linux__) && !defined(__ANDROID__)
+#elif defined(__linux__) && !defined(DUCKSTATION_ANDROID_APP) && !defined(DUCKSTATION_LIBRETRO)
 
 #include <fcntl.h>
 #include <libudev.h>

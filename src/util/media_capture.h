@@ -19,7 +19,7 @@ enum class MediaCaptureBackend : u8
 #ifdef _WIN32
   MediaFoundation,
 #endif
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   FFmpeg,
 #endif
   MaxCount,

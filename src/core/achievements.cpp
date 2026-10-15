@@ -182,7 +182,7 @@ static void LeaderboardFetchNearbyCallback(int result, const char* error_message
 static void LeaderboardFetchAllCallback(int result, const char* error_message, rc_client_leaderboard_entry_list_t* list,
                                         rc_client_t* client, void* callback_userdata);
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 static void DrawAchievement(const rc_client_achievement_t* cheevo);
 static void DrawLeaderboardListEntry(const rc_client_leaderboard_t* lboard);
 static void DrawLeaderboardEntry(const rc_client_leaderboard_entry_t& entry, bool is_self, float rank_column_width,
@@ -2018,7 +2018,7 @@ bool Achievements::ConfirmHardcoreModeDisable(const char* trigger)
 
 void Achievements::ConfirmHardcoreModeDisableAsync(const char* trigger, std::function<void(bool)> callback)
 {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 #ifdef ENABLE_RAINTEGRATION
   if (IsUsingRAIntegration())
   {
@@ -2061,7 +2061,7 @@ void Achievements::ConfirmHardcoreModeDisableAsync(const char* trigger, std::fun
 
 void Achievements::ClearUIState()
 {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   if (FullscreenUI::IsAchievementsWindowOpen() || FullscreenUI::IsLeaderboardsWindowOpen())
     FullscreenUI::ReturnToPreviousWindow();
 
@@ -2236,7 +2236,7 @@ void Achievements::DrawGameOverlays()
   }
 }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 
 void Achievements::DrawPauseMenuOverlays()
 {
@@ -3163,7 +3163,7 @@ void Achievements::DrawLeaderboardListEntry(const rc_client_leaderboard_t* lboar
     OpenLeaderboard(lboard);
 }
 
-#endif // __ANDROID__
+#endif // DUCKSTATION_ANDROID_APP
 
 void Achievements::OpenLeaderboard(const rc_client_leaderboard_t* lboard)
 {

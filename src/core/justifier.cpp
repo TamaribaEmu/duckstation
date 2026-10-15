@@ -415,7 +415,7 @@ void Justifier::LoadSettings(SettingsInterface& si, const char* section, bool in
       cursor_color = cursor_color_opt.value();
   }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   if (cursor_path.empty())
     cursor_path = Path::Combine(EmuFolders::Resources, "images/crosshair.png");
 #endif

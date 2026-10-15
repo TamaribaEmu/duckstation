@@ -26,7 +26,7 @@ void OnSystemResumed();
 void OnSystemDestroyed();
 void OnRunningGameChanged();
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 void OpenPauseMenu();
 void OpenAchievementsWindow();
 bool IsAchievementsWindowOpen();

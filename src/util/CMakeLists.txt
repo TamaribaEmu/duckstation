@@ -77,7 +77,19 @@ target_precompile_headers(util PRIVATE "pch.h")
 target_include_directories(util PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_include_directories(util PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(util PUBLIC common simpleini imgui)
-target_link_libraries(util PRIVATE libchdr JPEG::JPEG PNG::PNG WebP::libwebp ZLIB::ZLIB SoundTouch::SoundTouchDLL xxhash Zstd::Zstd reshadefx)
+if(BUILD_LIBRETRO_CORE)
+  target_link_libraries(util PRIVATE libchdr ZLIB::ZLIB xxhash Zstd::Zstd reshadefx)
+  # A stand-in for SoundTouch's C API (the core never stretches audio), shaderc's header, FFmpeg's headers.
+  target_include_directories(util PRIVATE "${CMAKE_SOURCE_DIR}/src/duckstation-libretro/stubs")
+  target_include_directories(util PUBLIC "${DUCKSTATION_SHADERC_INCLUDE_DIR}" ${FFMPEG_INCLUDE_DIRS})
+  if(DUCKSTATION_SHADERC_LIBRARIES)
+    target_compile_definitions(util PRIVATE DUCKSTATION_SHADERC_STATIC=1)
+    target_link_libraries(util PRIVATE ${DUCKSTATION_SHADERC_LIBRARIES})
+  endif()
+  target_link_libraries(util PUBLIC freesurround)
+else()
+  target_link_libraries(util PRIVATE libchdr JPEG::JPEG PNG::PNG WebP::libwebp ZLIB::ZLIB SoundTouch::SoundTouchDLL xxhash Zstd::Zstd reshadefx)
+endif()
 
 if(ENABLE_X11)
   target_compile_definitions(util PRIVATE "-DENABLE_X11=1")
@@ -169,13 +181,13 @@ if(ENABLE_VULKAN)
   target_link_libraries(util PUBLIC vulkan-headers)
 endif()
 
-if(ENABLE_VULKAN OR APPLE)
+if((ENABLE_VULKAN OR APPLE) AND NOT BUILD_LIBRETRO_CORE)
   # shaderc is loaded dynamically to reduce module loads on startup.
   get_target_property(SHADERC_INCLUDE_DIR Shaderc::shaderc_shared INTERFACE_INCLUDE_DIRECTORIES)
   target_include_directories(util PUBLIC ${SHADERC_INCLUDE_DIR})
 endif()
 
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT BUILD_LIBRETRO_CORE)
   target_sources(util PRIVATE
     cubeb_audio_stream.cpp
     sdl_audio_stream.cpp
@@ -252,7 +264,7 @@ elseif(APPLE)
   find_library(QUARTZCORE_LIBRARY QuartzCore)
   target_link_libraries(util PRIVATE ${METAL_LIBRARY} ${QUARTZCORE_LIBRARY} ${IOK_LIBRARY})
   set_source_files_properties(${MAC_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS TRUE)
-elseif(NOT ANDROID)
+elseif(NOT ANDROID AND NOT BUILD_LIBRETRO_CORE)
   target_sources(util PRIVATE
     platform_misc_unix.cpp
   )
@@ -266,7 +278,7 @@ elseif(NOT ANDROID)
   endif()
 endif()
 
-if(NOT WIN32 AND NOT ANDROID)
+if(NOT WIN32 AND NOT ANDROID AND NOT BUILD_LIBRETRO_CORE)
   target_sources(util PRIVATE
     http_downloader_curl.cpp
     http_downloader_curl.h

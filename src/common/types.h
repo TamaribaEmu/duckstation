@@ -243,3 +243,9 @@ static constexpr u32 HOST_CACHE_LINE_SIZE = 64; // Everything else is 64b.
 
 // Compute the address of a base type given a field offset.
 #define BASE_FROM_RECORD_FIELD(ptr, base_type, field) ((base_type*)(((char*)ptr) - offsetof(base_type, field)))
+
+// DuckStation's own Android app, whose frontend supplied some platform code (files, memory mapping) and left out some
+// features. The libretro core on Android builds like Linux instead.
+#if defined(__ANDROID__) && !defined(DUCKSTATION_LIBRETRO)
+#define DUCKSTATION_ANDROID_APP 1
+#endif

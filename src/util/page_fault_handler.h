@@ -15,4 +15,10 @@ enum class HandlerResult
 
 HandlerResult HandlePageFault(void* exception_pc, void* fault_address, bool is_write);
 bool Install(Error* error = nullptr);
+
+#ifdef DUCKSTATION_LIBRETRO
+/// Libretro: puts back the handlers Install() replaced, before the core is unloaded. Faults that are not ours go to
+/// those handlers while ours is installed.
+void Uninstall();
+#endif
 } // namespace PageFaultHandler

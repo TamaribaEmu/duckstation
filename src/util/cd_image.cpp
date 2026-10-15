@@ -54,7 +54,7 @@ std::unique_ptr<CDImage> CDImage::Open(const char* filename, bool allow_patches,
 {
   const char* extension;
 
-#ifdef __ANDROID__
+#ifdef DUCKSTATION_ANDROID_APP
   std::string filename_display_name(FileSystem::GetDisplayNameFromPath(filename));
   if (filename_display_name.empty())
     filename_display_name = filename;
@@ -119,7 +119,7 @@ std::unique_ptr<CDImage> CDImage::Open(const char* filename, bool allow_patches,
 
   if (allow_patches)
   {
-#ifdef __ANDROID__
+#ifdef DUCKSTATION_ANDROID_APP
     const std::string ppf_filename(
       Path::BuildRelativePath(filename, Path::ReplaceExtension(filename_display_name, "ppf")));
 #else

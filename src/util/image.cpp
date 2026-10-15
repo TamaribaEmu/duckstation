@@ -12,10 +12,13 @@
 #include "common/scoped_guard.h"
 #include "common/string_util.h"
 
+// The libretro core reads and writes no picture files (the frontend keeps its own).
+#ifndef DUCKSTATION_LIBRETRO
 #include <jpeglib.h>
 #include <png.h>
 #include <webp/decode.h>
 #include <webp/encode.h>
+#endif
 
 // clang-format off
 #ifdef _MSC_VER
@@ -25,6 +28,7 @@
 
 Log_SetChannel(Image);
 
+#ifndef DUCKSTATION_LIBRETRO
 static bool PNGBufferLoader(RGBA8Image* image, const void* buffer, size_t buffer_size);
 static bool PNGBufferSaver(const RGBA8Image& image, std::vector<u8>* buffer, u8 quality);
 static bool PNGFileLoader(RGBA8Image* image, std::string_view filename, std::FILE* fp);
@@ -39,6 +43,7 @@ static bool WebPBufferLoader(RGBA8Image* image, const void* buffer, size_t buffe
 static bool WebPBufferSaver(const RGBA8Image& image, std::vector<u8>* buffer, u8 quality);
 static bool WebPFileLoader(RGBA8Image* image, std::string_view filename, std::FILE* fp);
 static bool WebPFileSaver(const RGBA8Image& image, std::string_view filename, std::FILE* fp, u8 quality);
+#endif
 
 struct FormatHandler
 {
@@ -49,6 +54,7 @@ struct FormatHandler
   bool (*file_saver)(const RGBA8Image&, std::string_view, std::FILE*, u8);
 };
 
+#ifndef DUCKSTATION_LIBRETRO
 static constexpr FormatHandler s_format_handlers[] = {
   {"png", PNGBufferLoader, PNGBufferSaver, PNGFileLoader, PNGFileSaver},
   {"jpg", JPEGBufferLoader, JPEGBufferSaver, JPEGFileLoader, JPEGFileSaver},
@@ -56,8 +62,13 @@ static constexpr FormatHandler s_format_handlers[] = {
   {"webp", WebPBufferLoader, WebPBufferSaver, WebPFileLoader, WebPFileSaver},
 };
 
+#endif
+
 static const FormatHandler* GetFormatHandler(std::string_view extension)
 {
+#ifdef DUCKSTATION_LIBRETRO
+  return nullptr;
+#else
   for (const FormatHandler& handler : s_format_handlers)
   {
     if (StringUtil::Strncasecmp(extension.data(), handler.extension, extension.size()) == 0)
@@ -65,6 +76,7 @@ static const FormatHandler* GetFormatHandler(std::string_view extension)
   }
 
   return nullptr;
+#endif
 }
 
 RGBA8Image::RGBA8Image() = default;
@@ -225,6 +237,8 @@ void RGBA8Image::Resize(const RGBA8Image* src_image, u32 new_width, u32 new_heig
 }
 
 #endif
+
+#ifndef DUCKSTATION_LIBRETRO
 
 static bool PNGCommonLoader(RGBA8Image* image, png_structp png_ptr, png_infop info_ptr, std::vector<u32>& new_data,
                             std::vector<png_bytep>& row_pointers)
@@ -779,3 +793,5 @@ bool WebPFileSaver(const RGBA8Image& image, std::string_view filename, std::FILE
 
   return (std::fwrite(buffer.data(), buffer.size(), 1, fp) == 1);
 }
+
+#endif // DUCKSTATION_LIBRETRO

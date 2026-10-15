@@ -34,6 +34,11 @@ namespace PageFaultHandler {
 static std::recursive_mutex s_exception_handler_mutex;
 static bool s_in_exception_handler = false;
 static bool s_installed = false;
+#if defined(DUCKSTATION_LIBRETRO) && !defined(_WIN32)
+// The host's handlers (the frontend's, or the Android runtime's), for faults that are not ours.
+static struct sigaction s_previous_segv = {};
+static struct sigaction s_previous_bus = {};
+#endif
 } // namespace PageFaultHandler
 
 #if defined(CPU_ARCH_ARM64)
@@ -217,8 +222,29 @@ void PageFaultHandler::SignalHandler(int sig, siginfo_t* info, void* ctx)
   if (result == HandlerResult::ContinueExecution)
     return;
 
+#ifdef DUCKSTATION_LIBRETRO
+  // Not ours: the host's handler decides (on return the instruction faults again if nothing changed).
+  const struct sigaction& previous = (sig == SIGBUS) ? s_previous_bus : s_previous_segv;
+  if (previous.sa_flags & SA_SIGINFO)
+  {
+    if (previous.sa_sigaction)
+    {
+      previous.sa_sigaction(sig, info, ctx);
+      return;
+    }
+  }
+  else if (previous.sa_handler != SIG_DFL && previous.sa_handler != SIG_IGN && previous.sa_handler != nullptr)
+  {
+    previous.sa_handler(sig);
+    return;
+  }
+  // The default action: die with this signal once this handler returns and the instruction runs again.
+  signal(sig, SIG_DFL);
+  return;
+#else
   // We couldn't handle it. Pass it off to the crash dumper.
   CrashHandler::CrashSignalHandler(sig, info, ctx);
+#endif
 }
 
 bool PageFaultHandler::Install(Error* error)
@@ -235,14 +261,21 @@ bool PageFaultHandler::Install(Error* error)
   // Don't block the signal from executing recursively, we want to fire the original handler.
   sa.sa_flags |= SA_NODEFER;
 #endif
-  if (sigaction(SIGSEGV, &sa, nullptr) != 0)
+#ifdef DUCKSTATION_LIBRETRO
+  struct sigaction* const previous_segv = &s_previous_segv;
+  struct sigaction* const previous_bus = &s_previous_bus;
+#else
+  struct sigaction* const previous_segv = nullptr;
+  struct sigaction* const previous_bus = nullptr;
+#endif
+  if (sigaction(SIGSEGV, &sa, previous_segv) != 0)
   {
     Error::SetErrno(error, "sigaction() for SIGSEGV failed: ", errno);
     return false;
   }
 #if defined(__APPLE__) || defined(__aarch64__)
   // MacOS uses SIGBUS for memory permission violations
-  if (sigaction(SIGBUS, &sa, nullptr) != 0)
+  if (sigaction(SIGBUS, &sa, previous_bus) != 0)
   {
     Error::SetErrno(error, "sigaction() for SIGBUS failed: ", errno);
     return false;
@@ -255,5 +288,20 @@ bool PageFaultHandler::Install(Error* error)
   s_installed = true;
   return true;
 }
+
+#ifdef DUCKSTATION_LIBRETRO
+void PageFaultHandler::Uninstall()
+{
+  std::unique_lock lock(s_exception_handler_mutex);
+  if (!s_installed)
+    return;
+
+  sigaction(SIGSEGV, &s_previous_segv, nullptr);
+#if defined(__APPLE__) || defined(__aarch64__)
+  sigaction(SIGBUS, &s_previous_bus, nullptr);
+#endif
+  s_installed = false;
+}
+#endif
 
 #endif

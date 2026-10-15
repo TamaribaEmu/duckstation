@@ -159,7 +159,7 @@ using ImGuiFullscreen::ThreeWayToggleButton;
 using ImGuiFullscreen::ToggleButton;
 using ImGuiFullscreen::WantsToCloseMenu;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
 namespace FullscreenUI {
 enum class MainWindowType
 {
@@ -7141,7 +7141,7 @@ bool FullscreenUI::IsLeaderboardsWindowOpen()
   return (s_current_main_window == MainWindowType::Leaderboards);
 }
 
-#endif // __ANDROID__
+#endif // DUCKSTATION_ANDROID_APP
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Translation String Area

@@ -23,7 +23,7 @@ class SoundTouch;
 enum class AudioBackend : u8
 {
   Null,
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   Cubeb,
   SDL,
 #else
@@ -80,7 +80,7 @@ struct AudioStreamParameters
 
   static constexpr AudioStretchMode DEFAULT_STRETCH_MODE = AudioStretchMode::TimeStretch;
   static constexpr AudioExpansionMode DEFAULT_EXPANSION_MODE = AudioExpansionMode::Disabled;
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static constexpr u16 DEFAULT_BUFFER_MS = 50;
   static constexpr u16 DEFAULT_OUTPUT_LATENCY_MS = 20;
 #else
@@ -125,7 +125,7 @@ public:
   static constexpr u32 MIN_EXPANSION_BLOCK_SIZE = 256;
   static constexpr u32 MAX_EXPANSION_BLOCK_SIZE = 4096;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static constexpr AudioBackend DEFAULT_BACKEND = AudioBackend::Cubeb;
 #else
   static constexpr AudioBackend DEFAULT_BACKEND = AudioBackend::AAudio;
@@ -178,6 +178,12 @@ public:
 
   void BeginWrite(SampleType** buffer_ptr, u32* num_frames);
   void EndWrite(u32 num_frames);
+
+#ifdef DUCKSTATION_LIBRETRO
+  /// Libretro: takes up to `max_frames` stereo frames of what was written, for the frontend to play (a null stream,
+  /// which nothing else reads). Returns how many it took.
+  u32 TakeFrames(SampleType* samples, u32 max_frames);
+#endif
 
   void EmptyBuffer();
 
@@ -236,7 +242,7 @@ private:
   static constexpr u32 STRETCH_RESET_THRESHOLD = 5;
   static constexpr u32 TARGET_IPS = 691;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static std::vector<std::pair<std::string, std::string>> GetCubebDriverNames();
   static std::vector<DeviceInfo> GetCubebOutputDevices(const char* driver, u32 sample_rate);
   static std::unique_ptr<AudioStream> CreateCubebAudioStream(u32 sample_rate, const AudioStreamParameters& parameters,
@@ -259,7 +265,7 @@ private:
 
   void InternalWriteFrames(SampleType* samples, u32 num_frames);
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   void ExpandAllocate();
 #endif
 
@@ -300,7 +306,7 @@ private:
   // float buffer, soundtouch only accepts float samples as input
   std::unique_ptr<float[]> m_float_buffer;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   std::unique_ptr<FreeSurroundDecoder> m_expander;
 
   // block buffer for expansion

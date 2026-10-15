@@ -108,6 +108,37 @@ static u32 s_debug_scope_depth = 0;
 // We need to synchronize instance creation because of adapter enumeration from the UI thread.
 static std::mutex s_instance_mutex;
 
+#ifdef DUCKSTATION_LIBRETRO
+namespace {
+struct ExternalState
+{
+  std::unique_ptr<VulkanDevice> device;
+  void (*lock)(void*) = nullptr;
+  void (*unlock)(void*) = nullptr;
+  void* user = nullptr;
+};
+ExternalState s_external;
+
+// Held around every use of the queue, which the frontend shares (a no-op on our own device).
+struct QueueLock
+{
+  QueueLock()
+  {
+    if (s_external.lock)
+      s_external.lock(s_external.user);
+  }
+  ~QueueLock()
+  {
+    if (s_external.unlock)
+      s_external.unlock(s_external.user);
+  }
+};
+} // namespace
+#define QUEUE_LOCK() QueueLock queue_lock_
+#else
+#define QUEUE_LOCK()
+#endif
+
 VulkanDevice::VulkanDevice()
 {
 #ifdef _DEBUG
@@ -618,6 +649,16 @@ bool VulkanDevice::CreateDevice(VkSurfaceKHR surface, bool enable_validation_lay
   ExtensionList enabled_extensions;
   if (!SelectDeviceExtensions(&enabled_extensions, surface != VK_NULL_HANDLE, error))
     return false;
+#ifdef DUCKSTATION_LIBRETRO
+  for (const char* name : m_external_required_extensions)
+  {
+    if (std::none_of(enabled_extensions.begin(), enabled_extensions.end(),
+                     [name](const char* it) { return std::strcmp(it, name) == 0; }))
+    {
+      enabled_extensions.push_back(name);
+    }
+  }
+#endif
 
   device_info.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
   device_info.ppEnabledExtensionNames = enabled_extensions.data();
@@ -1269,7 +1310,13 @@ void VulkanDevice::WaitForFenceCounter(u64 fence_counter)
 void VulkanDevice::WaitForGPUIdle()
 {
   WaitForPresentComplete();
+#ifdef DUCKSTATION_LIBRETRO
+  // The device is shared: wait for our queue only.
+  QUEUE_LOCK();
+  vkQueueWaitIdle(m_graphics_queue);
+#else
   vkDeviceWaitIdle(m_device);
+#endif
 }
 
 float VulkanDevice::GetAndResetAccumulatedGPUTime()
@@ -1442,6 +1489,7 @@ void VulkanDevice::DoSubmitCommandBuffer(u32 index, VulkanSwapChain* present_swa
     submit_info.signalSemaphoreCount = 1;
   }
 
+  QUEUE_LOCK();
   const VkResult res = vkQueueSubmit(m_graphics_queue, 1, &submit_info, resources.fence);
   if (res != VK_SUCCESS)
   {
@@ -1464,6 +1512,7 @@ void VulkanDevice::DoPresent(VulkanSwapChain* present_swap_chain)
 
   present_swap_chain->ResetImageAcquireResult();
 
+  QUEUE_LOCK();
   const VkResult res = vkQueuePresentKHR(m_present_queue, &present_info);
   if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
   {
@@ -1995,6 +2044,17 @@ bool VulkanDevice::CreateDevice(std::string_view adapter, bool threaded_presenta
   bool enable_debug_utils = m_debug_device;
   bool enable_validation_layer = m_debug_device;
 
+  VkSurfaceKHR surface = VK_NULL_HANDLE;
+  ScopedGuard surface_cleanup = [this, &surface]() {
+    if (surface != VK_NULL_HANDLE)
+      vkDestroySurfaceKHR(m_instance, surface, nullptr);
+  };
+
+#ifdef DUCKSTATION_LIBRETRO
+  // The frontend's device (CreateExternalDevice()) is already made.
+  if (!m_external)
+  {
+#endif
   if (!Vulkan::LoadVulkanLibrary(error))
   {
     Error::AddPrefix(error,
@@ -2077,11 +2137,6 @@ bool VulkanDevice::CreateDevice(std::string_view adapter, bool threaded_presenta
   if (enable_debug_utils)
     EnableDebugUtils();
 
-  VkSurfaceKHR surface = VK_NULL_HANDLE;
-  ScopedGuard surface_cleanup = [this, &surface]() {
-    if (surface != VK_NULL_HANDLE)
-      vkDestroySurfaceKHR(m_instance, surface, nullptr);
-  };
   if (m_window_info.type != WindowInfo::Type::Surfaceless)
   {
     surface = VulkanSwapChain::CreateVulkanSurface(m_instance, m_physical_device, &m_window_info);
@@ -2092,6 +2147,9 @@ bool VulkanDevice::CreateDevice(std::string_view adapter, bool threaded_presenta
   // Attempt to create the device.
   if (!CreateDevice(surface, enable_validation_layer, disabled_features, error))
     return false;
+#ifdef DUCKSTATION_LIBRETRO
+  }
+#endif
 
   // And critical resources.
   if (!CreateAllocator() || !CreatePersistentDescriptorPool() || !CreateCommandBuffers() || !CreatePipelineLayouts())
@@ -2177,6 +2235,15 @@ void VulkanDevice::DestroyDevice()
     vkDestroyPipelineCache(m_device, m_pipeline_cache, nullptr);
     m_pipeline_cache = VK_NULL_HANDLE;
   }
+
+#ifdef DUCKSTATION_LIBRETRO
+  if (m_external)
+  {
+    // The frontend keeps both (it goes on drawing with this device).
+    m_device = VK_NULL_HANDLE;
+    m_instance = VK_NULL_HANDLE;
+  }
+#endif
 
   if (m_device != VK_NULL_HANDLE)
   {
@@ -4103,3 +4170,73 @@ void VulkanDevice::DrawIndexedWithBarrier(u32 index_count, u32 base_index, u32 b
       DefaultCaseIsUnreachable();
   }
 }
+
+#ifdef DUCKSTATION_LIBRETRO
+
+bool VulkanDevice::CreateExternalDevice(VkInstance instance, VkPhysicalDevice gpu, VkSurfaceKHR surface,
+                                        const char* const* required_extensions, u32 num_required_extensions,
+                                        ExternalDevice* out, Error* error)
+{
+  std::unique_lock lock(s_instance_mutex);
+  s_external.device.reset();
+
+  if (!Vulkan::LoadVulkanLibrary(error))
+    return false;
+  if (!Vulkan::LoadVulkanInstanceFunctions(instance))
+  {
+    Error::SetStringView(error, "Failed to load Vulkan instance functions");
+    Vulkan::UnloadVulkanLibrary();
+    return false;
+  }
+
+  std::unique_ptr<VulkanDevice> dev = std::make_unique<VulkanDevice>();
+  dev->m_external = true;
+  dev->m_instance = instance;
+  dev->m_physical_device = gpu;
+  dev->m_external_required_extensions.assign(required_extensions, required_extensions + num_required_extensions);
+
+  // As CreateDevice() above does for a GPU of our own.
+  vkGetPhysicalDeviceProperties(gpu, &dev->m_device_properties);
+  VkPhysicalDeviceLimits& limits = dev->m_device_properties.limits;
+  limits.minUniformBufferOffsetAlignment = std::max(limits.minUniformBufferOffsetAlignment, static_cast<VkDeviceSize>(1));
+  limits.minTexelBufferOffsetAlignment = std::max(limits.minTexelBufferOffsetAlignment, static_cast<VkDeviceSize>(1));
+  limits.optimalBufferCopyOffsetAlignment =
+    std::max(limits.optimalBufferCopyOffsetAlignment, static_cast<VkDeviceSize>(1));
+  limits.optimalBufferCopyRowPitchAlignment =
+    std::max(limits.optimalBufferCopyRowPitchAlignment, static_cast<VkDeviceSize>(1));
+  limits.bufferImageGranularity = std::max(limits.bufferImageGranularity, static_cast<VkDeviceSize>(1));
+
+  if (!dev->CreateDevice(surface, false, static_cast<FeatureMask>(0), error))
+  {
+    if (dev->m_device != VK_NULL_HANDLE)
+      vkDestroyDevice(dev->m_device, nullptr);
+    dev->m_device = VK_NULL_HANDLE;
+    Vulkan::UnloadVulkanLibrary();
+    return false;
+  }
+
+  out->gpu = gpu;
+  out->device = dev->m_device;
+  out->queue = dev->m_graphics_queue;
+  out->queue_family = dev->m_graphics_queue_family_index;
+  out->present_queue = (surface != VK_NULL_HANDLE) ? dev->m_present_queue : dev->m_graphics_queue;
+  out->present_queue_family =
+    (surface != VK_NULL_HANDLE) ? dev->m_present_queue_family_index : dev->m_graphics_queue_family_index;
+  s_external.device = std::move(dev);
+  return true;
+}
+
+std::unique_ptr<VulkanDevice> VulkanDevice::TakeExternalDevice()
+{
+  std::unique_lock lock(s_instance_mutex);
+  return std::move(s_external.device);
+}
+
+void VulkanDevice::SetExternalQueueLock(void (*lock)(void*), void (*unlock)(void*), void* user)
+{
+  s_external.lock = lock;
+  s_external.unlock = unlock;
+  s_external.user = user;
+}
+
+#endif

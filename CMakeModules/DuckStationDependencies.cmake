@@ -1,3 +1,15 @@
+if(BUILD_LIBRETRO_CORE)
+  # Only zlib from the system; the rest is in dep/ (Zstandard too, dep/zstd). shaderc's header is needed to build: the library itself is
+  # loaded at run time (the system's libshaderc_shared), or linked in when DUCKSTATION_SHADERC_LIBRARIES names it
+  # (Android, which has no system copy).
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+  find_package(ZLIB REQUIRED)
+  find_path(DUCKSTATION_SHADERC_INCLUDE_DIR shaderc/shaderc.h REQUIRED)
+  set(FFMPEG_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/dep/ffmpeg/include")
+  return()
+endif()
+
 # From PCSX2: On macOS, Mono.framework contains an ancient version of libpng. We don't want that.
 # Avoid it by telling cmake to avoid finding frameworks while we search for libpng.
 if(APPLE)

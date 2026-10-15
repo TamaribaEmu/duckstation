@@ -62,7 +62,9 @@
 #include "IconsEmoji.h"
 #include "IconsFontAwesome5.h"
 
+#ifndef DUCKSTATION_LIBRETRO
 #include "cpuinfo.h"
+#endif
 #include "fmt/chrono.h"
 #include "fmt/format.h"
 #include "imgui.h"
@@ -80,6 +82,10 @@
 #include <zstd.h>
 #include <zstd_errors.h>
 
+#if defined(DUCKSTATION_LIBRETRO) && !defined(_WIN32)
+#include <unistd.h>
+#endif
+
 Log_SetChannel(System);
 
 #ifdef _WIN32
@@ -89,7 +95,7 @@ Log_SetChannel(System);
 #include <objbase.h>
 #endif
 
-#ifndef __ANDROID__
+#if !defined(DUCKSTATION_ANDROID_APP) && !defined(DUCKSTATION_LIBRETRO)
 #define ENABLE_DISCORD_PRESENCE 1
 #define ENABLE_PINE_SERVER 1
 #define ENABLE_GDB_SERVER 1
@@ -260,6 +266,9 @@ static bool s_running_game_custom_title = false;
 static bool s_system_executing = false;
 static bool s_system_interrupted = false;
 static bool s_frame_step_request = false;
+#ifdef DUCKSTATION_LIBRETRO
+static bool s_libretro_frame_done = false;
+#endif
 static bool s_fast_forward_enabled = false;
 static bool s_turbo_enabled = false;
 static bool s_throttler_enabled = false;
@@ -351,10 +360,12 @@ static TinyString GetTimestampStringForFileName()
 
 bool System::Internal::PerformEarlyHardwareChecks(Error* error)
 {
+#ifndef DUCKSTATION_LIBRETRO
   // This shouldn't fail... if it does, just hope for the best.
   cpuinfo_initialize();
+#endif
 
-#ifdef CPU_ARCH_X64
+#if defined(CPU_ARCH_X64) && !defined(DUCKSTATION_LIBRETRO)
   if (!cpuinfo_has_x86_sse4_1())
   {
     Error::SetStringFmt(error, "Your CPU does not support the SSE4.1 instruction set.\n"
@@ -385,6 +396,7 @@ bool System::Internal::PerformEarlyHardwareChecks(Error* error)
 void System::CheckCacheLineSize()
 {
   u32 max_line_size = 0;
+#ifndef DUCKSTATION_LIBRETRO
   if (cpuinfo_initialize())
   {
     const u32 num_l1is = cpuinfo_get_l1i_caches_count();
@@ -409,6 +421,20 @@ void System::CheckCacheLineSize()
         max_line_size = std::max(max_line_size, cache->line_size);
     }
   }
+#endif
+
+#if defined(DUCKSTATION_LIBRETRO) && defined(_SC_LEVEL1_DCACHE_LINESIZE)
+  // No cpuinfo in the libretro core: ask the C library (glibc; bionic answers 0, as on the Shield).
+  if (const long line = sysconf(_SC_LEVEL1_DCACHE_LINESIZE); line > 0)
+    max_line_size = static_cast<u32>(line);
+#endif
+#ifdef DUCKSTATION_LIBRETRO
+  if (max_line_size == 0)
+  {
+    INFO_LOG("Cache line size unknown, expecting {} byte lines.", HOST_CACHE_LINE_SIZE);
+    return;
+  }
+#endif
 
   if (max_line_size == 0)
   {
@@ -429,12 +455,14 @@ void System::LogStartupInformation()
   INFO_LOG("DuckStation Version {} [{}]", g_scm_tag_str, g_scm_branch_str);
   INFO_LOG("SCM Timestamp: {}", g_scm_date_str);
   INFO_LOG("Build Timestamp: {} {}", __DATE__, __TIME__);
+#ifndef DUCKSTATION_LIBRETRO
   if (const cpuinfo_package* package = cpuinfo_get_package(0)) [[likely]]
   {
     INFO_LOG("Host CPU: {}", package->name);
     INFO_LOG("CPU has {} logical processor(s) and {} core(s) across {} cluster(s).", package->processor_count,
              package->core_count, package->cluster_count);
   }
+#endif
 }
 
 bool System::Internal::ProcessStartup(Error* error)
@@ -1307,7 +1335,7 @@ void System::SetDefaultSettings(SettingsInterface& si)
 
   temp.Save(si, false);
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   si.SetStringValue("MediaCapture", "Backend", MediaCapture::GetBackendName(Settings::DEFAULT_MEDIA_CAPTURE_BACKEND));
   si.SetStringValue("MediaCapture", "Container", Settings::DEFAULT_MEDIA_CAPTURE_CONTAINER);
   si.SetBoolValue("MediaCapture", "VideoCapture", true);
@@ -1999,6 +2027,13 @@ void System::Execute()
           CPU::Execute();
 
         s_system_executing = false;
+#ifdef DUCKSTATION_LIBRETRO
+        if (s_libretro_frame_done)
+        {
+          s_libretro_frame_done = false;
+          return;
+        }
+#endif
         continue;
       }
 
@@ -2042,6 +2077,13 @@ void System::FrameDone()
 #endif
 
   Host::FrameDone();
+
+#ifdef DUCKSTATION_LIBRETRO
+  // The frontend presents the frame and paces the game: back to it after every frame (Execute() returns).
+  s_libretro_frame_done = true;
+  s_system_interrupted = true;
+  CheckForAndExitExecution();
+#endif
 
   if (s_frame_step_request)
   {
@@ -3013,6 +3055,80 @@ bool System::SaveStateToBuffer(SaveStateBuffer* buffer, Error* error, u32 screen
   buffer->state_size = sw.GetPosition();
   return true;
 }
+
+#ifdef DUCKSTATION_LIBRETRO
+
+namespace {
+#pragma pack(push, 4)
+struct LIBRETRO_STATE_HEADER
+{
+  u32 magic;
+  u32 version;
+  u32 size;
+  u32 reserved;
+};
+#pragma pack(pop)
+} // namespace
+
+size_t System::GetLibretroStateSize()
+{
+  return sizeof(LIBRETRO_STATE_HEADER) + GetMaxSaveStateSize();
+}
+
+bool System::SaveLibretroState(std::span<u8> data, Error* error)
+{
+  if (!IsValid() || data.size() < GetLibretroStateSize())
+  {
+    Error::SetStringView(error, "No system, or the buffer is too small.");
+    return false;
+  }
+
+  g_gpu->RestoreDeviceContext();
+  StateWrapper sw(data.subspan(sizeof(LIBRETRO_STATE_HEADER)), StateWrapper::Mode::Write, SAVE_STATE_VERSION);
+  if (!DoState(sw, nullptr, false, false))
+  {
+    Error::SetStringView(error, "DoState() failed");
+    return false;
+  }
+
+  const LIBRETRO_STATE_HEADER header = {SAVE_STATE_MAGIC, SAVE_STATE_VERSION, static_cast<u32>(sw.GetPosition()), 0};
+  std::memcpy(data.data(), &header, sizeof(header));
+  // The rest stays zero, so that states pack small.
+  const size_t used = sizeof(header) + header.size;
+  std::memset(data.data() + used, 0, data.size() - used);
+  return true;
+}
+
+bool System::LoadLibretroState(std::span<const u8> data, Error* error)
+{
+  LIBRETRO_STATE_HEADER header;
+  if (!IsValid() || data.size() < sizeof(header))
+  {
+    Error::SetStringView(error, "No system, or the state is too small.");
+    return false;
+  }
+
+  std::memcpy(&header, data.data(), sizeof(header));
+  if (header.magic != SAVE_STATE_MAGIC || header.version < SAVE_STATE_MINIMUM_VERSION ||
+      header.version > SAVE_STATE_VERSION || header.size > data.size() - sizeof(header))
+  {
+    Error::SetStringFmt(error, "Not a state this version can load (version {}).", header.version);
+    return false;
+  }
+
+  ClearMemorySaveStates();
+  StateWrapper sw(data.subspan(sizeof(header), header.size), StateWrapper::Mode::Read, header.version);
+  if (!DoState(sw, nullptr, true, false))
+  {
+    Error::SetStringView(error, "The state is corrupted.");
+    return false;
+  }
+
+  ResetPerformanceCounters();
+  return true;
+}
+
+#endif
 
 bool System::SaveStateBufferToFile(const SaveStateBuffer& buffer, std::FILE* fp, Error* error,
                                    SaveStateCompressionMode compression)
@@ -4048,7 +4164,7 @@ bool System::CheckForSBIFile(CDImage* image, Error* error)
       return true;
     }
   }
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   Error::SetStringFmt(
     error,
     TRANSLATE_FS("System", "You are attempting to run a libcrypt protected game without an SBI file:\n\n{0}: "

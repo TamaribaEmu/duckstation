@@ -368,7 +368,7 @@ void ImGuiManager::DrawPerformanceOverlay(float& position_y, float scale, float 
         DRAW_LINE(fixed_font, text, IM_COL32(255, 255, 255, 255));
       }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
       if (MediaCapture* cap = System::GetMediaCapture())
       {
         text.assign("CAP: ");
@@ -500,7 +500,7 @@ void ImGuiManager::DrawEnhancementsOverlay()
 
 void ImGuiManager::DrawMediaCaptureOverlay(float& position_y, float scale, float margin, float spacing)
 {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   MediaCapture* const cap = System::GetMediaCapture();
   if (!cap || FullscreenUI::HasActiveWindow())
     return;

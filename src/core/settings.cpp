@@ -85,7 +85,7 @@ float SettingInfo::FloatStepValue() const
 
 #if defined(_WIN32)
 const MediaCaptureBackend Settings::DEFAULT_MEDIA_CAPTURE_BACKEND = MediaCaptureBackend::MediaFoundation;
-#elif !defined(__ANDROID__)
+#elif !defined(DUCKSTATION_ANDROID_APP)
 const MediaCaptureBackend Settings::DEFAULT_MEDIA_CAPTURE_BACKEND = MediaCaptureBackend::FFmpeg;
 #endif
 
@@ -445,7 +445,7 @@ void Settings::Load(SettingsInterface& si, SettingsInterface& controller_si)
   texture_replacements.dump_vram_write_height_threshold =
     si.GetIntValue("TextureReplacements", "DumpVRAMWriteHeightThreshold", 128);
 
-#ifdef __ANDROID__
+#ifdef DUCKSTATION_ANDROID_APP
   // No expansion due to license incompatibility.
   audio_expansion_mode = AudioExpansionMode::Disabled;
 
@@ -798,7 +798,7 @@ void Settings::FixIncompatibleSettings(bool display_osd_messages)
   }
 #endif
 
-#if defined(__ANDROID__) && defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM64)
+#if defined(DUCKSTATION_ANDROID_APP) && defined(__arm__) && !defined(__aarch64__) && !defined(_M_ARM64)
   if (g_settings.rewind_enable)
   {
     Host::AddKeyedOSDMessage("rewind_disabled_android",
@@ -896,7 +896,7 @@ void Settings::SetDefaultControllerConfig(SettingsInterface& si)
     si.SetStringValue(section.c_str(), "Type", Controller::GetDefaultPadType(i));
   }
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   // Use the automapper to set this up.
   InputManager::MapController(si, 0, InputManager::GetGenericBindingMapping("Keyboard"));
 #endif
@@ -1381,7 +1381,7 @@ const char* Settings::GetDisplayCropModeDisplayName(DisplayCropMode crop_mode)
 }
 
 static constexpr const std::array s_display_aspect_ratio_names = {
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   TRANSLATE_NOOP("DisplayAspectRatio", "Auto (Game Native)"),
   TRANSLATE_NOOP("DisplayAspectRatio", "Stretch To Fill"),
   TRANSLATE_NOOP("DisplayAspectRatio", "Custom"),
@@ -2076,7 +2076,7 @@ static const char* s_log_filters[] = {
   "WAVWriter",
   "WindowInfo",
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   "CubebAudioStream",
   "SDLAudioStream",
 #endif

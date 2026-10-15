@@ -516,7 +516,7 @@ struct Settings
 
   static constexpr SaveStateCompressionMode DEFAULT_SAVE_STATE_COMPRESSION_MODE = SaveStateCompressionMode::ZstDefault;
 
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static const MediaCaptureBackend DEFAULT_MEDIA_CAPTURE_BACKEND;
   static constexpr const char* DEFAULT_MEDIA_CAPTURE_CONTAINER = "mp4";
   static constexpr u32 DEFAULT_MEDIA_CAPTURE_VIDEO_WIDTH = 640;
@@ -526,14 +526,14 @@ struct Settings
 #endif
 
   // Enable console logging by default on Linux platforms.
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__linux__) && !defined(DUCKSTATION_ANDROID_APP)
   static constexpr bool DEFAULT_LOG_TO_CONSOLE = true;
 #else
   static constexpr bool DEFAULT_LOG_TO_CONSOLE = false;
 #endif
 
   // Android doesn't create settings until they're first opened, so we have to override the defaults here.
-#ifndef __ANDROID__
+#ifndef DUCKSTATION_ANDROID_APP
   static constexpr bool DEFAULT_SAVE_STATE_BACKUPS = true;
   static constexpr bool DEFAULT_FAST_BOOT_VALUE = false;
   static constexpr bool DEFAULT_THREADED_PRESENTATION = false;
